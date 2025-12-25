@@ -31,7 +31,10 @@
   ],
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "lint": "echo 'No linter configured for backend'",
+    "test": "echo 'No tests configured yet'",
+    "build": "cd frontend && npm ci && npm run build"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
