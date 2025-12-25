@@ -8,12 +8,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/liveweb.git"
+    "url": "https://github.com/brandonqr/liveweb.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/liveweb/issues"
+    "url": "https://github.com/brandonqr/liveweb/issues"
   },
-  "homepage": "https://github.com/yourusername/liveweb#readme",
+  "homepage": "https://github.com/brandonqr/liveweb#readme",
   "keywords": [
     "ai",
     "gemini",
