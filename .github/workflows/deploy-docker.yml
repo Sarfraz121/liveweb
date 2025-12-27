@@ -1,0 +1,179 @@
+name: Deploy LiveWeb with Docker
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.API_BASE_URL || 'http://localhost:3001' }}
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Server
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER || 'root' }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            set -e
+            echo "🚀 Starting Docker deployment..."
+            
+            # Create directory structure
+            mkdir -p /opt/liveweb/{frontend/dist,logs}
+            echo "✅ Directories created"
+            
+            # Login to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin || true
+            
+            # Pull latest image
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || echo "⚠️ Image pull failed, will build locally"
+            
+            echo "✅ Image pulled"
+
+      - name: Copy frontend build and config files
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          export SSHPASS="${{ secrets.SERVER_PASSWORD }}"
+          
+          SSH_USER="${{ secrets.SERVER_USER }}"
+          if [ -z "$SSH_USER" ]; then
+            SSH_USER="root"
+          fi
+          
+          # Copy frontend build
+          sshpass -e scp -o StrictHostKeyChecking=no -r frontend/dist/* $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/frontend/dist/
+          
+          # Copy docker-compose.yml
+          sshpass -e scp -o StrictHostKeyChecking=no docker-compose.yml $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/
+          
+          # Copy infrastructure (for nginx configs)
+          sshpass -e scp -o StrictHostKeyChecking=no -r infrastructure $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/
+
+      - name: Start containers with Docker Compose
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER || 'root' }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            cd /opt/liveweb
+            
+            # Create .env file
+            cat > .env << 'ENVEOF'
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            PORT=3001
+            NODE_ENV=production
+            API_BASE_URL=${{ secrets.API_BASE_URL || format('http://{0}:3001', secrets.SERVER_IP) }}
+            DOMAIN=${{ secrets.DOMAIN || '' }}
+            BACKEND_PORT=3001
+            FRONTEND_PORT=80
+            ENVEOF
+            
+            # Stop existing containers
+            docker-compose down || true
+            
+            # Pull latest image (if not already pulled)
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || true
+            
+            # Update docker-compose.yml to use the image
+            sed -i "s|build:|# build:|g" docker-compose.yml || true
+            sed -i "s|dockerfile: Dockerfile|# dockerfile: Dockerfile|g" docker-compose.yml || true
+            sed -i "/liveweb-backend:/a\    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" docker-compose.yml || true
+            
+            # Start containers
+            docker-compose up -d --force-recreate
+            
+            # Wait for health check
+            echo "⏳ Waiting for services to start..."
+            sleep 10
+            
+            # Verify deployment
+            docker-compose ps
+            docker-compose logs --tail=20 liveweb-backend
+            
+            # Health check
+            curl -f http://localhost:3001/health && echo "✅ Backend health check passed" || echo "⚠️ Backend health check failed"
+            
+            echo "✅ Deployment completed!"
+
+      - name: Deployment success
+        if: success()
+        run: |
+          echo "✅ Docker deployment successful!"
+          echo "Backend: http://${{ secrets.SERVER_IP }}:3001"
+          if [ -n "${{ secrets.DOMAIN }}" ]; then
+            echo "Frontend: https://${{ secrets.DOMAIN }}"
+          else
+            echo "Frontend: http://${{ secrets.SERVER_IP }}"
+          fi

@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   liveweb-backend:
+    # Use image from registry (set in workflow) or build locally
+    image: ${DOCKER_IMAGE:-ghcr.io/brandonqr/liveweb:latest}
     build:
       context: .
       dockerfile: Dockerfile

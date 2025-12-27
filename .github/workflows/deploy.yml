@@ -251,12 +251,12 @@ jobs:
           
           echo "Creating .env file on server..."
           $SSH_CMD "cat > ${{ env.APP_DIR }}/.env << 'ENVEOF'
-GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-PORT=$APP_PORT
-NODE_ENV=production
-API_BASE_URL=$API_BASE_URL
-DOMAIN=${{ secrets.DOMAIN || '' }}
-ENVEOF" || {
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          PORT=$APP_PORT
+          NODE_ENV=production
+          API_BASE_URL=$API_BASE_URL
+          DOMAIN=${{ secrets.DOMAIN || '' }}
+          ENVEOF" || {
             echo "⚠️ Failed to create .env via heredoc, trying alternative method..."
             $SSH_CMD "printf 'GEMINI_API_KEY=%s\nPORT=%s\nNODE_ENV=production\nAPI_BASE_URL=%s\nDOMAIN=%s\n' '${{ secrets.GEMINI_API_KEY }}' '$APP_PORT' '$API_BASE_URL' '${{ secrets.DOMAIN || '' }}' > ${{ env.APP_DIR }}/.env" || echo "Warning: .env creation failed"
           }

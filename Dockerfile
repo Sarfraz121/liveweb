@@ -33,6 +33,9 @@ COPY server.js ./
 COPY server ./server
 COPY package.json ./
 
+# Copy frontend build (if available)
+COPY frontend/dist ./frontend/dist
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 liveweb
