@@ -33,7 +33,7 @@ COPY server.js ./
 COPY server ./server
 COPY package.json ./
 
-# Copy frontend build (if available)
+# Copy frontend build (must exist - built in workflow before Docker build)
 COPY frontend/dist ./frontend/dist
 
 # Create non-root user
