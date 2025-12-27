@@ -34,6 +34,8 @@ COPY server ./server
 COPY package.json ./
 
 # Copy frontend build (must exist - built in workflow before Docker build)
+# Create directory structure first
+RUN mkdir -p ./frontend/dist
 COPY frontend/dist ./frontend/dist
 
 # Create non-root user
