@@ -175,7 +175,11 @@ jobs:
             docker-compose ps
             
             echo "📋 Recent backend logs:"
-            docker-compose logs --tail=30 liveweb-backend || true
+            docker-compose logs --tail=50 liveweb-backend || true
+            
+            # Check if frontend files exist in container
+            echo "📁 Checking frontend files in container..."
+            docker-compose exec -T liveweb-backend ls -la /app/frontend/dist/ 2>/dev/null || echo "⚠️ Could not list frontend files"
             
             # Health check
             echo "🏥 Running health check..."
@@ -185,6 +189,10 @@ jobs:
               echo "⚠️ Backend health check failed, but deployment may still be in progress"
               docker-compose ps
             fi
+            
+            # Test root endpoint
+            echo "🌐 Testing root endpoint..."
+            curl -I http://localhost:3001/ 2>/dev/null | head -5 || echo "⚠️ Root endpoint not responding"
             
             echo "✅ Deployment completed!"
 
