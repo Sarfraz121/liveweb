@@ -14,8 +14,16 @@ const app = express();
 app.use(corsMiddleware);
 app.use(express.json({ limit: '10mb' }));
 
-// API Routes (must be before static files)
-app.use('/', routes);
+// Health check route (before static files)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API Routes - mount at /api explicitly
+app.use('/api', routes);
 
 // Serve static files from frontend/dist in production
 if (process.env.NODE_ENV === 'production') {
@@ -35,7 +43,9 @@ if (process.env.NODE_ENV === 'production') {
       console.log(`✅ Using fallback path: ${fallbackPath}`);
       app.use(express.static(fallbackPath));
       
+      // SPA fallback - serve index.html for all non-API routes
       app.get('*', (req, res) => {
+        // Skip API and health routes
         if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
           return res.status(404).json({ error: 'Endpoint not found' });
         }
@@ -50,13 +60,16 @@ if (process.env.NODE_ENV === 'production') {
     
     // SPA fallback - serve index.html for all non-API routes
     app.get('*', (req, res) => {
-      // Don't serve index.html for API routes
+      // Skip API and health routes
       if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
         return res.status(404).json({ error: 'Endpoint not found' });
       }
       res.sendFile(path.join(frontendDistPath, 'index.html'));
     });
   }
+} else {
+  // In development, mount API routes at root for backward compatibility
+  app.use('/', routes);
 }
 
 export default app;

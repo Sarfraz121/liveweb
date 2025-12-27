@@ -1,0 +1,103 @@
+name: Diagnose Server Issues
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: Diagnose Server
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Diagnose server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER || 'root' }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            echo "🔍 DIAGNÓSTICO COMPLETO DEL SERVIDOR"
+            echo "======================================"
+            echo ""
+            
+            # 1. Check Docker
+            echo "1️⃣ Docker Status:"
+            docker --version || echo "❌ Docker not installed"
+            docker-compose --version || echo "❌ Docker Compose not installed"
+            echo ""
+            
+            # 2. Check containers
+            echo "2️⃣ Container Status:"
+            cd /opt/liveweb 2>/dev/null || echo "❌ /opt/liveweb not found"
+            if [ -d "/opt/liveweb" ]; then
+              docker-compose ps || echo "⚠️ docker-compose not configured"
+              echo ""
+              
+              # 3. Check backend container
+              echo "3️⃣ Backend Container Details:"
+              docker ps -a | grep liveweb-backend || echo "❌ liveweb-backend container not found"
+              echo ""
+              
+              # 4. Backend logs
+              echo "4️⃣ Backend Logs (last 50 lines):"
+              docker-compose logs --tail=50 liveweb-backend 2>/dev/null || docker logs liveweb-backend --tail=50 2>/dev/null || echo "❌ Could not get logs"
+              echo ""
+              
+              # 5. Check if container is running
+              echo "5️⃣ Container Health:"
+              docker inspect liveweb-backend --format='{{.State.Status}}' 2>/dev/null || echo "❌ Container not found"
+              docker inspect liveweb-backend --format='{{.State.Health.Status}}' 2>/dev/null || echo "⚠️ No health check"
+              echo ""
+              
+              # 6. Check frontend files in container
+              echo "6️⃣ Frontend Files in Container:"
+              docker exec liveweb-backend ls -la /app/frontend/dist/ 2>/dev/null || echo "❌ Could not list files or container not running"
+              docker exec liveweb-backend find /app -name "index.html" 2>/dev/null || echo "❌ index.html not found"
+              echo ""
+              
+              # 7. Check port binding
+              echo "7️⃣ Port Binding:"
+              docker port liveweb-backend 2>/dev/null || echo "❌ Could not get port info"
+              netstat -tulpn | grep 3001 || ss -tulpn | grep 3001 || echo "⚠️ Port 3001 not listening"
+              echo ""
+              
+              # 8. Test from inside container
+              echo "8️⃣ Test from Inside Container:"
+              docker exec liveweb-backend curl -f http://localhost:3001/health 2>/dev/null && echo "✅ Health endpoint works" || echo "❌ Health endpoint failed"
+              docker exec liveweb-backend curl -I http://localhost:3001/ 2>/dev/null | head -3 || echo "❌ Root endpoint failed"
+              echo ""
+              
+              # 9. Check environment variables
+              echo "9️⃣ Environment Variables:"
+              docker exec liveweb-backend env | grep -E "(NODE_ENV|PORT|GEMINI)" || echo "⚠️ No env vars found"
+              echo ""
+              
+              # 10. Check process
+              echo "🔟 Node Process:"
+              docker exec liveweb-backend ps aux | grep node || echo "❌ Node process not found"
+              echo ""
+              
+              # 11. Check .env file
+              echo "1️⃣1️⃣ .env File:"
+              cat /opt/liveweb/.env 2>/dev/null | grep -v "GEMINI_API_KEY" || echo "⚠️ .env file not found or empty"
+              echo ""
+              
+              # 12. Test from host
+              echo "1️⃣2️⃣ Test from Host:"
+              curl -f http://localhost:3001/health 2>/dev/null && echo "✅ Health check from host works" || echo "❌ Health check from host failed"
+              curl -I http://localhost:3001/ 2>/dev/null | head -3 || echo "❌ Root endpoint from host failed"
+              echo ""
+              
+              # 13. Check docker-compose.yml
+              echo "1️⃣3️⃣ docker-compose.yml:"
+              cat /opt/liveweb/docker-compose.yml 2>/dev/null | head -30 || echo "❌ docker-compose.yml not found"
+              echo ""
+            else
+              echo "❌ /opt/liveweb directory does not exist"
+            fi
+            
+            echo "======================================"
+            echo "✅ Diagnóstico completado"

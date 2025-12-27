@@ -181,6 +181,12 @@ jobs:
             echo "📁 Checking frontend files in container..."
             docker-compose exec -T liveweb-backend ls -la /app/frontend/dist/ 2>/dev/null || echo "⚠️ Could not list frontend files"
             
+            # Check what's actually in the container
+            echo "📂 Container file structure:"
+            docker-compose exec -T liveweb-backend find /app -type f -name "*.html" 2>/dev/null | head -10 || echo "⚠️ Could not search files"
+            docker-compose exec -T liveweb-backend pwd 2>/dev/null || echo "⚠️ Could not get working directory"
+            docker-compose exec -T liveweb-backend ls -la /app/ 2>/dev/null || echo "⚠️ Could not list /app"
+            
             # Health check
             echo "🏥 Running health check..."
             if curl -f http://localhost:3001/health 2>/dev/null; then
@@ -192,7 +198,18 @@ jobs:
             
             # Test root endpoint
             echo "🌐 Testing root endpoint..."
-            curl -I http://localhost:3001/ 2>/dev/null | head -5 || echo "⚠️ Root endpoint not responding"
+            ROOT_RESPONSE=$(curl -I http://localhost:3001/ 2>/dev/null | head -5)
+            if [ -n "$ROOT_RESPONSE" ]; then
+              echo "$ROOT_RESPONSE"
+            else
+              echo "⚠️ Root endpoint not responding"
+              echo "🔍 Trying to get more info..."
+              curl -v http://localhost:3001/ 2>&1 | head -20 || echo "❌ Complete failure"
+            fi
+            
+            # Check if server is actually listening
+            echo "🔌 Checking if server is listening on port 3001..."
+            docker-compose exec -T liveweb-backend netstat -tuln 2>/dev/null | grep 3001 || docker-compose exec -T liveweb-backend ss -tuln 2>/dev/null | grep 3001 || echo "⚠️ Could not check listening ports"
             
             echo "✅ Deployment completed!"
 
