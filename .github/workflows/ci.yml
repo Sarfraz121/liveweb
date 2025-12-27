@@ -9,16 +9,30 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint || echo "Lint not configured"
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint || echo "⚠️ Linter found issues but continuing..."
         continue-on-error: true
-      - run: npm run test || echo "Tests not configured"
+
+      - name: Run tests
+        run: npm run test || echo "⚠️ Tests found issues but continuing..."
         continue-on-error: true
-      - run: npm run build
+
+      - name: Build application
+        run: npm run build
 

@@ -60,6 +60,8 @@ jobs:
     name: Deploy to Server
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
     
     steps:
@@ -91,41 +93,51 @@ jobs:
             echo "✅ Image pulled"
 
       - name: Copy config files
+        env:
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+          SERVER_USER: ${{ secrets.SERVER_USER || 'root' }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq sshpass
-          export SSHPASS="${{ secrets.SERVER_PASSWORD }}"
+          export SSHPASS="$SERVER_PASSWORD"
           
-          SSH_USER="${{ secrets.SERVER_USER }}"
+          SSH_USER="$SERVER_USER"
           if [ -z "$SSH_USER" ]; then
             SSH_USER="root"
           fi
           
           # Copy docker-compose.yml
-          sshpass -e scp -o StrictHostKeyChecking=no docker-compose.yml $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/
+          sshpass -e scp -o StrictHostKeyChecking=no docker-compose.yml $SSH_USER@$SERVER_IP:/opt/liveweb/
           
           # Copy infrastructure (for nginx configs)
-          sshpass -e scp -o StrictHostKeyChecking=no -r infrastructure $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/
+          sshpass -e scp -o StrictHostKeyChecking=no -r infrastructure $SSH_USER@$SERVER_IP:/opt/liveweb/
           
           # Note: frontend/dist is now included in the Docker image, no need to copy separately
 
       - name: Start containers with Docker Compose
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL || format('http://{0}:3001', secrets.SERVER_IP) }}
+          DOMAIN: ${{ secrets.DOMAIN || '' }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER || 'root' }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
+          envs: GEMINI_API_KEY,API_BASE_URL,DOMAIN
           script: |
             cd /opt/liveweb
             
-            # Create .env file
-            cat > .env << 'ENVEOF'
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            # Create .env file securely using environment variables
+            cat > .env << ENVEOF
+            GEMINI_API_KEY=${GEMINI_API_KEY}
             PORT=3001
             NODE_ENV=production
-            API_BASE_URL=${{ secrets.API_BASE_URL || format('http://{0}:3001', secrets.SERVER_IP) }}
-            DOMAIN=${{ secrets.DOMAIN || '' }}
+            API_BASE_URL=${API_BASE_URL}
+            DOMAIN=${DOMAIN}
             BACKEND_PORT=3001
             FRONTEND_PORT=80
             ENVEOF
