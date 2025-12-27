@@ -40,8 +40,9 @@ jobs:
 
       - name: Run frontend linter
         working-directory: ./frontend
-        run: npm run lint || echo "Linter found issues but continuing..."
+        run: npm run lint || echo "⚠️ Linter found issues but continuing..."
         continue-on-error: true
+        if: always()
 
       - name: Build frontend
         working-directory: ./frontend

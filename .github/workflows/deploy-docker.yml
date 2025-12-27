@@ -23,30 +23,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: ./frontend
-        run: npm run build
-        env:
-          VITE_API_BASE_URL: ${{ secrets.API_BASE_URL || 'http://localhost:3001' }}
-
-      - name: Verify frontend build exists
-        run: |
-          if [ ! -d "frontend/dist" ]; then
-            echo "❌ Frontend build failed - dist directory not found"
-            exit 1
-          fi
-          echo "✅ Frontend build verified"
-          ls -lah frontend/dist/ | head -10
-
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -69,18 +45,6 @@ jobs:
         with:
           driver-opts: |
             image=moby/buildkit:latest
-
-      - name: Verify frontend/dist before Docker build
-        run: |
-          echo "📦 Verifying frontend/dist exists..."
-          if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
-            echo "❌ ERROR: frontend/dist is missing or empty!"
-            echo "Contents of frontend/:"
-            ls -la frontend/ || true
-            exit 1
-          fi
-          echo "✅ frontend/dist verified:"
-          ls -lah frontend/dist/ | head -10
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -126,7 +90,7 @@ jobs:
             
             echo "✅ Image pulled"
 
-      - name: Copy frontend build and config files
+      - name: Copy config files
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq sshpass
@@ -137,14 +101,13 @@ jobs:
             SSH_USER="root"
           fi
           
-          # Copy frontend build
-          sshpass -e scp -o StrictHostKeyChecking=no -r frontend/dist/* $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/frontend/dist/
-          
           # Copy docker-compose.yml
           sshpass -e scp -o StrictHostKeyChecking=no docker-compose.yml $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/
           
           # Copy infrastructure (for nginx configs)
           sshpass -e scp -o StrictHostKeyChecking=no -r infrastructure $SSH_USER@${{ secrets.SERVER_IP }}:/opt/liveweb/
+          
+          # Note: frontend/dist is now included in the Docker image, no need to copy separately
 
       - name: Start containers with Docker Compose
         uses: appleboy/ssh-action@v1.2.0
@@ -178,19 +141,38 @@ jobs:
             sed -i "s|dockerfile: Dockerfile|# dockerfile: Dockerfile|g" docker-compose.yml || true
             sed -i "/liveweb-backend:/a\    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" docker-compose.yml || true
             
-            # Start containers
-            docker-compose up -d --force-recreate
+            # Start containers with health check wait
+            docker-compose up -d --force-recreate --remove-orphans
             
-            # Wait for health check
-            echo "⏳ Waiting for services to start..."
-            sleep 10
+            # Wait for services to be healthy
+            echo "⏳ Waiting for services to start and become healthy..."
+            MAX_WAIT=60
+            WAIT_COUNT=0
+            while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+              if docker-compose ps | grep -q "liveweb-backend.*healthy"; then
+                echo "✅ Backend is healthy!"
+                break
+              fi
+              echo "⏳ Waiting for backend to become healthy... ($WAIT_COUNT/$MAX_WAIT seconds)"
+              sleep 2
+              WAIT_COUNT=$((WAIT_COUNT + 2))
+            done
             
             # Verify deployment
+            echo "📊 Container status:"
             docker-compose ps
-            docker-compose logs --tail=20 liveweb-backend
+            
+            echo "📋 Recent backend logs:"
+            docker-compose logs --tail=30 liveweb-backend || true
             
             # Health check
-            curl -f http://localhost:3001/health && echo "✅ Backend health check passed" || echo "⚠️ Backend health check failed"
+            echo "🏥 Running health check..."
+            if curl -f http://localhost:3001/health 2>/dev/null; then
+              echo "✅ Backend health check passed"
+            else
+              echo "⚠️ Backend health check failed, but deployment may still be in progress"
+              docker-compose ps
+            fi
             
             echo "✅ Deployment completed!"
 
