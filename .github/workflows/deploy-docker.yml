@@ -70,6 +70,18 @@ jobs:
           driver-opts: |
             image=moby/buildkit:latest
 
+      - name: Verify frontend/dist before Docker build
+        run: |
+          echo "📦 Verifying frontend/dist exists..."
+          if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
+            echo "❌ ERROR: frontend/dist is missing or empty!"
+            echo "Contents of frontend/:"
+            ls -la frontend/ || true
+            exit 1
+          fi
+          echo "✅ frontend/dist verified:"
+          ls -lah frontend/dist/ | head -10
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
