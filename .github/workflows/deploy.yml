@@ -287,16 +287,29 @@ jobs:
           fi
           
           echo "Executing deployment..."
-          $SSH_CMD "cd ${{ env.APP_DIR }}/infrastructure && chmod +x scripts/*.sh 2>/dev/null && ./scripts/deploy.sh" || {
-            echo "⚠️ Deployment script not found or failed, using manual deployment..."
-            
+          
+          # Check if Docker is available, use it if possible
+          if $SSH_CMD "command -v docker >/dev/null 2>&1 && command -v docker-compose >/dev/null 2>&1"; then
+            echo "🐳 Using Docker deployment..."
             $SSH_CMD "cd ${{ env.APP_DIR }} && \
-              npm install --production && \
-              pm2 stop ${{ env.APP_NAME }} || true && \
-              pm2 delete ${{ env.APP_NAME }} || true && \
-              pm2 start server.js --name ${{ env.APP_NAME }} --update-env && \
-              pm2 save"
-          }
+              docker-compose down || true && \
+              docker-compose up -d --build"
+          elif $SSH_CMD "command -v node >/dev/null 2>&1"; then
+            echo "📦 Using PM2 deployment..."
+            $SSH_CMD "cd ${{ env.APP_DIR }}/infrastructure && chmod +x scripts/*.sh 2>/dev/null && ./scripts/deploy.sh" || {
+              echo "⚠️ Deployment script not found or failed, using manual deployment..."
+              $SSH_CMD "cd ${{ env.APP_DIR }} && \
+                npm install --production && \
+                pm2 stop ${{ env.APP_NAME }} || true && \
+                pm2 delete ${{ env.APP_NAME }} || true && \
+                pm2 start server.js --name ${{ env.APP_NAME }} --update-env && \
+                pm2 save"
+            }
+          else
+            echo "❌ ERROR: Neither Docker nor Node.js is installed on the server!"
+            echo "Please install Node.js 22+ or use Docker Compose"
+            exit 1
+          fi
 
       - name: Verify deployment
         run: |
