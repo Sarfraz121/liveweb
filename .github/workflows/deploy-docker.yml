@@ -145,10 +145,12 @@ jobs:
             echo "✅ Deployment successful!"
             docker compose ps
             
-            # Setup SSL/HTTPS if DOMAIN is configured
+            # Setup Nginx proxy and SSL/HTTPS if DOMAIN is configured
             if [ -n "${DOMAIN}" ]; then
               echo "🌐 Domain configured: ${DOMAIN}"
-              echo "🔒 Setting up SSL/HTTPS..."
+              
+              # Step 1: Setup Nginx proxy (HTTP first, for Let's Encrypt)
+              echo "🔧 Step 1: Setting up Nginx proxy..."
               
               # Check if nginx is installed on host
               if ! command -v nginx &> /dev/null; then
@@ -157,6 +159,46 @@ jobs:
                 apt-get install -y -qq nginx
               fi
               
+              # Run nginx proxy setup script
+              if [ -f "/opt/liveweb/infrastructure/scripts/setup-nginx-proxy.sh" ]; then
+                chmod +x /opt/liveweb/infrastructure/scripts/setup-nginx-proxy.sh
+                /opt/liveweb/infrastructure/scripts/setup-nginx-proxy.sh "${DOMAIN}" || {
+                  echo "⚠️  Nginx proxy setup failed"
+                }
+              else
+                echo "⚠️  Nginx proxy script not found. Setting up manually..."
+                mkdir -p /var/www/certbot
+                # Create basic HTTP config for Let's Encrypt
+                cat > /etc/nginx/sites-available/liveweb << NGINXEOF
+upstream liveweb_backend {
+    server 127.0.0.1:3001;
+}
+
+server {
+    listen 80;
+    server_name ${DOMAIN} www.${DOMAIN};
+    
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    
+    location / {
+        proxy_pass http://liveweb_backend;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINXEOF
+                ln -sf /etc/nginx/sites-available/liveweb /etc/nginx/sites-enabled/liveweb
+                rm -f /etc/nginx/sites-enabled/default
+                nginx -t && systemctl reload nginx
+              fi
+              
+              # Step 2: Setup SSL/HTTPS
+              echo "🔒 Step 2: Setting up SSL/HTTPS..."
+              
               # Check if certbot is installed
               if ! command -v certbot &> /dev/null; then
                 echo "📦 Installing Certbot..."
@@ -164,29 +206,18 @@ jobs:
                 apt-get install -y -qq certbot python3-certbot-nginx
               fi
               
-              # Run SSL setup script if it exists
+              # Run SSL setup script
               if [ -f "/opt/liveweb/infrastructure/scripts/setup-ssl-domain.sh" ]; then
                 chmod +x /opt/liveweb/infrastructure/scripts/setup-ssl-domain.sh
-                # Note: Certbot requires interactive mode or proper email
-                # For automated setup, we'll configure nginx but certbot needs to be run manually
-                echo "📝 Configuring Nginx for domain ${DOMAIN}..."
+                # Certbot may need manual intervention, so we try but don't fail
                 /opt/liveweb/infrastructure/scripts/setup-ssl-domain.sh "${DOMAIN}" || {
-                  echo "⚠️  SSL setup script failed or certbot needs manual intervention"
-                  echo "   You can run manually:"
-                  echo "   sudo /opt/liveweb/infrastructure/scripts/setup-ssl-domain.sh ${DOMAIN}"
+                  echo "⚠️  SSL setup may need manual intervention"
+                  echo "   Run manually: sudo /opt/liveweb/infrastructure/scripts/setup-ssl-domain.sh ${DOMAIN}"
+                  echo "   Or: sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
                 }
               else
-                echo "⚠️  SSL setup script not found. Setting up manually..."
-                # Basic nginx config setup
-                mkdir -p /var/www/certbot
-                if [ -f "/opt/liveweb/infrastructure/nginx/liveweb-docker.conf" ]; then
-                  sed "s/YOUR_DOMAIN.com/${DOMAIN}/g" /opt/liveweb/infrastructure/nginx/liveweb-docker.conf > /etc/nginx/sites-available/liveweb
-                  ln -sf /etc/nginx/sites-available/liveweb /etc/nginx/sites-enabled/liveweb
-                  rm -f /etc/nginx/sites-enabled/default
-                  nginx -t && systemctl reload nginx
-                  echo "✅ Nginx configured. Run certbot manually:"
-                  echo "   sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
-                fi
+                echo "⚠️  SSL setup script not found. Run certbot manually:"
+                echo "   sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
               fi
             else
               echo "ℹ️  No domain configured. Application available at http://${SERVER_IP}:3001"
