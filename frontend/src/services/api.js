@@ -1,4 +1,5 @@
 // API Base URL - uses environment variable in production, localhost in development
+// In production, always use window.location.origin to work with any port/domain
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
                      (import.meta.env.PROD ? window.location.origin : 'http://localhost:3000');
 

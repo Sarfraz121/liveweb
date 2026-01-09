@@ -29,7 +29,11 @@ export const useSSELogs = (onLog) => {
           eventSourceRef.current.close();
         }
 
-        const eventSource = new EventSource('http://localhost:3000/api/logs/stream');
+        // Use window.location.origin in production, localhost:3000 in development
+        const logsUrl = import.meta.env.PROD 
+          ? `${window.location.origin}/api/logs/stream`
+          : 'http://localhost:3000/api/logs/stream';
+        const eventSource = new EventSource(logsUrl);
         eventSourceRef.current = eventSource;
 
         eventSource.onopen = () => {
