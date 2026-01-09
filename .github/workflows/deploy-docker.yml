@@ -108,10 +108,10 @@ jobs:
           fi
           
           # Copy docker-compose.yml
-          sshpass -e scp -o StrictHostKeyChecking=no docker-compose.yml $SSH_USER@$SERVER_IP:/opt/liveweb/
+          sshpass -e scp -o StrictHostKeyChecking=no docker-compose.yml "${SSH_USER}@${SERVER_IP}:/opt/liveweb/"
           
           # Copy infrastructure (for nginx configs)
-          sshpass -e scp -o StrictHostKeyChecking=no -r infrastructure $SSH_USER@$SERVER_IP:/opt/liveweb/
+          sshpass -e scp -o StrictHostKeyChecking=no -r infrastructure "${SSH_USER}@${SERVER_IP}:/opt/liveweb/"
           
           # Note: frontend/dist is now included in the Docker image, no need to copy separately
 
