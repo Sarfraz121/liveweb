@@ -34,14 +34,26 @@ if (process.env.NODE_ENV === 'production') {
   // Verify path exists and log for debugging
   if (fs.existsSync(frontendDistPath)) {
     console.log(`✅ Serving frontend from: ${frontendDistPath}`);
+    
+    // IMPORTANTE: Orden correcto de middleware:
+    // 1. Primero servir archivos estáticos (JS, CSS, imágenes, etc.)
     app.use(express.static(frontendDistPath));
     
-    // SPA fallback - serve index.html for all non-API routes
+    // 2. CRÍTICO: SPA Fallback - debe ir DESPUÉS de las rutas de API y archivos estáticos
+    // Esto maneja rutas como /perfil, /dashboard, etc. que son rutas del frontend
+    // Si el usuario entra directamente a /perfil o recarga la página, 
+    // Node.js no encontrará esa ruta de API, así que devuelve index.html
+    // y deja que React/Vue maneje el routing del lado del cliente
     app.get('*', (req, res) => {
-      // Skip API and health routes
-      if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
-        return res.status(404).json({ error: 'Endpoint not found' });
+      // No reenviar requests de API que fallaron
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'Not Found' });
       }
+      // No reenviar health check
+      if (req.path.startsWith('/health')) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+      // Para cualquier otra ruta, devolver index.html (SPA fallback)
       res.sendFile(path.join(frontendDistPath, 'index.html'));
     });
   } else {
